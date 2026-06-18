@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Мото-трекер</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#14171c">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+  :root{
+    --bg:#14171c; --surface:#1e242c; --surface2:#262e38; --line:#323b46;
+    --text:#e8eaed; --muted:#9aa3ad;
+    --amber:#f5a623; --green:#3ecf8e; --red:#ff5a4d; --blue:#5aa9ff;
+    --r:14px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;background:var(--bg);color:var(--text);
+    font-family:system-ui,-apple-system,Roboto,"Segoe UI",sans-serif;
+    font-size:17px;line-height:1.4}
+  body{padding:0 0 86px;max-width:560px;margin:0 auto}
+  .num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
+  h1,h2,h3{margin:0;font-weight:700}
+  header{padding:18px 16px 8px}
+  header .sub{color:var(--muted);font-size:14px;margin-top:2px}
+  .screen{padding:8px 16px 24px;display:none}
+  .screen.active{display:block}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);
+    padding:16px;margin:12px 0}
+  .card h3{font-size:14px;color:var(--muted);font-weight:600;text-transform:uppercase;
+    letter-spacing:.04em;margin-bottom:10px}
+  .big{font-size:clamp(38px,12vw,58px);font-weight:800;line-height:1.05}
+  .big.amber{color:var(--amber)} .big.green{color:var(--green)} .big.red{color:var(--red)}
+  .row{display:flex;gap:12px;align-items:center;justify-content:space-between}
+  .row.wrap{flex-wrap:wrap}
+  .stat{flex:1 1 120px;background:var(--surface2);border-radius:12px;padding:12px}
+  .stat .v{font-size:24px;font-weight:700} .stat .l{color:var(--muted);font-size:13px}
+  label{display:block;color:var(--muted);font-size:14px;margin:14px 0 6px}
+  input,select,textarea{width:100%;background:var(--surface2);color:var(--text);
+    border:1px solid var(--line);border-radius:12px;padding:14px;font-size:18px;font-family:inherit}
+  textarea{min-height:64px;resize:vertical}
+  button{font-family:inherit;font-size:17px;border:none;border-radius:12px;
+    padding:16px;font-weight:700;cursor:pointer;width:100%}
+  .btn-primary{background:var(--amber);color:#1a1205}
+  .btn-ghost{background:var(--surface2);color:var(--text);border:1px solid var(--line)}
+  .btn-stop{background:var(--red);color:#fff;font-size:22px;padding:22px}
+  .btn-sm{padding:10px 14px;font-size:15px;width:auto}
+  .pill{display:inline-block;padding:4px 10px;border-radius:999px;font-size:13px;
+    background:var(--surface2);border:1px solid var(--line);color:var(--muted)}
+  .pill.ride{color:var(--amber);border-color:var(--amber)}
+  .pill.rest{color:var(--blue);border-color:var(--blue)}
+  .pill.red{color:var(--red);border-color:var(--red)}
+  .list-item{display:flex;justify-content:space-between;gap:10px;padding:12px 0;
+    border-bottom:1px solid var(--line)}
+  .list-item:last-child{border-bottom:none}
+  .muted{color:var(--muted)} .small{font-size:14px} .tiny{font-size:12px}
+  .tag{font-size:13px;padding:2px 8px;border-radius:8px;background:var(--surface2)}
+  nav{position:fixed;bottom:0;left:0;right:0;background:#11151a;border-top:1px solid var(--line);
+    display:flex;max-width:560px;margin:0 auto;z-index:10}
+  nav button{background:none;border:none;color:var(--muted);padding:10px 4px;border-radius:0;
+    font-size:11px;font-weight:600;flex:1}
+  nav button.active{color:var(--amber)}
+  nav .ic{font-size:20px;display:block;margin-bottom:2px}
+  .hint{background:rgba(245,166,35,.08);border:1px solid rgba(245,166,35,.3);
+    border-radius:12px;padding:12px;font-size:14px;color:#f0c98a;margin:12px 0}
+  .danger-hint{background:rgba(255,90,77,.08);border-color:rgba(255,90,77,.35);color:#ffb0a8}
+  .ok-hint{background:rgba(62,207,142,.08);border-color:rgba(62,207,142,.3);color:#9fe6c5}
+  .scenarios{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .scenarios .card{margin:0}
+  .toggle-day{display:flex;justify-content:space-between;align-items:center;
+    padding:10px 0;border-bottom:1px solid var(--line)}
+  canvas{width:100%;height:auto;display:block}
+  .empty{text-align:center;color:var(--muted);padding:32px 8px}
+  .divider{height:1px;background:var(--line);margin:16px 0}
+  .inline2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .right{text-align:right}
+</style>
+</head>
+<body>
+
+<!-- ============ SETUP / ONBOARDING ============ -->
+<div id="setup" class="screen">
+  <header><h1>Новая поездка</h1><div class="sub">Заполни один раз. План заморозится как точка отсчёта.</div></header>
+  <div class="card">
+    <label>Название</label>
+    <input id="s_name" placeholder="Москва → Магадан → Владивосток, 2026">
+    <div class="inline2">
+      <div><label>Старт — дата</label><input id="s_sdate" type="date"></div>
+      <div><label>Финиш — дата</label><input id="s_edate" type="date"></div>
+    </div>
+    <div class="inline2">
+      <div><label>Старт — точка</label><input id="s_splace" placeholder="Москва"></div>
+      <div><label>Финиш — точка</label><input id="s_eplace" placeholder="Владивосток"></div>
+    </div>
+    <div class="inline2">
+      <div><label>Всего км (план)</label><input id="s_total" type="number" inputmode="numeric" placeholder="15000"></div>
+      <div><label>Потолок км/день</label><input id="s_cap" type="number" inputmode="numeric" placeholder="600"></div>
+    </div>
+    <div class="inline2">
+      <div><label>Цикл: дней езды</label><input id="s_ride" type="number" inputmode="numeric" value="4"></div>
+      <div><label>Цикл: дней отдыха</label><input id="s_rest" type="number" inputmode="numeric" value="1"></div>
+    </div>
+    <label>Старт. одометр, км (необязательно)</label>
+    <input id="s_odo" type="number" inputmode="numeric" placeholder="напр. 42300">
+    <div class="hint">Если впишешь одометр, дневной пробег будет считаться как разница показаний — меньше ошибок при усталом вводе.</div>
+  </div>
+  <button class="btn-primary" onclick="generatePlan()">Построить план →</button>
+  <div class="divider"></div>
+  <button class="btn-ghost" onclick="document.getElementById('importFile').click()">Импорт из бэкапа JSON</button>
+</div>
+
+<!-- ============ PLAN REVIEW (pre-freeze) ============ -->
+<div id="review" class="screen">
+  <header><h1>Проверь план</h1><div class="sub">Можно править норму и тип дня. После заморозки это становится базовой линией.</div></header>
+  <div id="reviewSummary" class="card"></div>
+  <div class="card"><h3>Дни</h3><div id="reviewDays"></div></div>
+  <button class="btn-primary" onclick="freezePlan()">Заморозить план</button>
+  <div style="height:8px"></div>
+  <button class="btn-ghost" onclick="backToSetup()">← Изменить параметры</button>
+</div>
+
+<!-- ============ HOME ============ -->
+<div id="home" class="screen">
+  <header><h1 id="homeTitle">—</h1><div class="sub" id="homeDate">—</div></header>
+  <div id="homeBody"></div>
+</div>
+
+<!-- ============ PLAN (live) ============ -->
+<div id="plan" class="screen">
+  <header><h1>План</h1><div class="sub">Переключай отдых ↔ езда, чтобы сдвигать нагрузку. Базовая линия не меняется.</div></header>
+  <div id="planList"></div>
+</div>
+
+<!-- ============ FACT ============ -->
+<div id="fact" class="screen">
+  <header><h1>Факт за день</h1><div class="sub" id="factDate">—</div></header>
+  <div class="card">
+    <div id="startOdoBlock" style="display:none">
+      <label>Стартовый одометр, км (первая запись)</label>
+      <input id="f_startodo" type="number" inputmode="numeric" oninput="previewDelta()">
+      <div class="divider"></div>
+    </div>
+    <div id="odoBlock">
+      <label>Текущий одометр, км</label>
+      <input id="f_odo" type="number" inputmode="numeric" oninput="previewDelta()">
+      <div class="small muted" id="deltaPreview" style="margin-top:8px">—</div>
+    </div>
+    <div class="row" style="margin-top:14px">
+      <label style="margin:0"><input type="checkbox" id="f_skip" style="width:auto;display:inline" onchange="toggleSkip()"> не ехал (пропуск)</label>
+    </div>
+    <div id="reasonBlock" style="display:none">
+      <label>Причина</label>
+      <select id="f_reason">
+        <option>Поломка</option><option>Погода</option><option>Усталость</option>
+        <option>Отдых не по плану</option><option>Не хотел</option><option>Другое</option>
+      </select>
+    </div>
+  </div>
+  <button class="btn-primary" onclick="saveFact()">Записать день</button>
+  <div class="card"><h3>История</h3><div id="factHistory"></div></div>
+</div>
+
+<!-- ============ STOPS ============ -->
+<div id="stops" class="screen">
+  <header><h1>Остановки</h1><div class="sub" id="gpsStatus">GPS — нажми «Стоп», чтобы снять координаты</div></header>
+  <button class="btn-stop" onclick="captureStop()">⏹ СТОП — снять точку</button>
+  <div id="stopForm" style="display:none" class="card">
+    <div class="small muted" id="stopCoords">—</div>
+    <label>Категория</label>
+    <select id="st_cat"></select>
+    <label>Добавить свою категорию</label>
+    <div class="inline2">
+      <input id="st_newcat" placeholder="новая категория">
+      <button class="btn-ghost btn-sm" onclick="addCategory()" style="width:100%">Добавить</button>
+    </div>
+    <label>Комментарий</label>
+    <textarea id="st_note" placeholder="необязательно"></textarea>
+    <div style="height:10px"></div>
+    <button class="btn-primary" onclick="saveStop()">Сохранить остановку</button>
+    <div style="height:8px"></div>
+    <button class="btn-ghost" onclick="cancelStop()">Отмена</button>
+  </div>
+  <div class="card">
+    <div class="row"><h3 style="margin:0">Список</h3>
+      <select id="stopFilter" onchange="renderStops()" style="width:auto;padding:8px 12px;font-size:14px"></select></div>
+    <div id="stopList"></div>
+  </div>
+</div>
+
+<!-- ============ MORE (analytics + settings + backup) ============ -->
+<div id="more" class="screen">
+  <header><h1>Ещё</h1></header>
+  <div class="card"><h3>Сводка</h3><div id="summary"></div></div>
+  <div class="card"><h3>План vs факт (накопленный км)</h3><canvas id="chart" width="520" height="220"></canvas></div>
+  <div class="card"><h3>Бэкап</h3>
+    <div class="small muted" id="storageInfo" style="margin-bottom:10px">—</div>
+    <button class="btn-primary" onclick="shareBackup()">Поделиться бэкапом (JSON)</button>
+    <div style="height:8px"></div>
+    <button class="btn-ghost" onclick="document.getElementById('importFile').click()">Импорт из бэкапа</button>
+    <div style="height:8px"></div>
+    <button class="btn-ghost btn-sm" style="width:100%" onclick="requestPersist()">Запросить защиту хранилища</button>
+  </div>
+  <div class="card"><h3>Настройки потолка</h3>
+    <label>Потолок км/день</label>
+    <input id="set_cap" type="number" inputmode="numeric" onchange="updateCap()">
+  </div>
+  <div class="card"><h3>Опасная зона</h3>
+    <button class="btn-ghost" style="color:var(--red)" onclick="resetAll()">Удалить поездку</button>
+  </div>
+</div>
+
+<input type="file" id="importFile" accept="application/json,.json" style="display:none" onchange="importBackup(event)">
+
+<!-- ============ NAV ============ -->
+<nav id="nav" style="display:none">
+  <button data-screen="home" onclick="go('home')"><span class="ic">◎</span>Главная</button>
+  <button data-screen="plan" onclick="go('plan')"><span class="ic">≣</span>План</button>
+  <button data-screen="fact" onclick="go('fact')"><span class="ic">＋</span>Факт</button>
+  <button data-screen="stops" onclick="go('stops')"><span class="ic">⏹</span>Стопы</button>
+  <button data-screen="more" onclick="go('more')"><span class="ic">⋯</span>Ещё</button>
+</nav>
+
+<script>
+const KEY='motoTracker.v1';
+const DEFAULT_CATS=['Заправка','Еда / кафе','Ночёвка','Достопримечательность','Фото-точка','Ремонт / сервис','Прочее'];
+let state=null, pendingStop=null;
+
+// ---------- persistence ----------
+function load(){ try{const r=localStorage.getItem(KEY); return r?JSON.parse(r):null;}catch(e){return null;} }
+function save(){ try{localStorage.setItem(KEY,JSON.stringify(state));}catch(e){alert('Не удалось сохранить: '+e.message);} }
+
+// ---------- date helpers (local timezone) ----------
+function todayISO(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function addDays(iso,n){const d=new Date(iso+'T00:00:00');d.setDate(d.getDate()+n);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function diffDays(a,b){return Math.round((new Date(b+'T00:00:00')-new Date(a+'T00:00:00'))/86400000);}
+function fmtDate(iso){const d=new Date(iso+'T00:00:00');return d.toLocaleDateString('ru-RU',{day:'2-digit',month:'short',weekday:'short'});}
+
+// ---------- setup ----------
+function generatePlan(){
+  const g=id=>document.getElementById(id).value.trim();
+  const name=g('s_name')||'Поездка', sdate=g('s_sdate'), edate=g('s_edate');
+  const total=+g('s_total'), cap=+g('s_cap')||600;
+  const ride=+g('s_ride')||4, rest=+g('s_rest')||1;
+  if(!sdate||!edate){alert('Укажи даты старта и финиша');return;}
+  if(diffDays(sdate,edate)<1){alert('Финиш должен быть позже старта');return;}
+  if(!total||total<=0){alert('Укажи общий план в км');return;}
+  const odo=g('s_odo'); 
+  const days=diffDays(sdate,edate)+1;
+  // assign types by cycle
+  const baseline=[]; let pos=0, cyc=ride+rest;
+  for(let i=0;i<days;i++){
+    const inCycle=pos%cyc;
+    baseline.push({date:addDays(sdate,i), type: inCycle<ride?'ride':'rest', planKm:0, cumPlan:0});
+    pos++;
+  }
+  const rideDays=baseline.filter(d=>d.type==='ride').length;
+  const per=Math.round(total/rideDays);
+  let cum=0, used=0, riders=baseline.filter(d=>d.type==='ride');
+  baseline.forEach(d=>{ if(d.type==='ride'){d.planKm=per;used+=per;} });
+  // fix rounding remainder on last ride day
+  const last=[...baseline].reverse().find(d=>d.type==='ride'); if(last) last.planKm+= (total-used);
+  baseline.forEach(d=>{cum+=d.planKm; d.cumPlan=cum;});
+  state={
+    version:1,
+    trip:{name,startDate:sdate,endDate:edate,startPlace:g('s_splace'),endPlace:g('s_eplace'),
+      totalKm:total,capKm:cap,cycleRide:ride,cycleRest:rest,startOdo:odo?+odo:null,frozen:false,createdAt:Date.now()},
+    baseline,
+    schedule:baseline.map(d=>({date:d.date,type:d.type})),
+    facts:{}, stops:[], categories:[...DEFAULT_CATS], settings:{}
+  };
+  renderReview(); go('review');
+}
+function backToSetup(){ go('setup'); }
+
+function renderReview(){
+  const t=state.trip, avg=Math.round(t.totalKm/state.baseline.filter(d=>d.type==='ride').length);
+  document.getElementById('reviewSummary').innerHTML=
+    `<div class="row wrap">
+      <div class="stat"><div class="v num">${state.baseline.length}</div><div class="l">дней всего</div></div>
+      <div class="stat"><div class="v num">${state.baseline.filter(d=>d.type==='ride').length}</div><div class="l">дней езды</div></div>
+      <div class="stat"><div class="v num">${avg}</div><div class="l">км / день езды</div></div>
+      <div class="stat"><div class="v num">${t.capKm}</div><div class="l">потолок</div></div>
+    </div>`;
+  const c=document.getElementById('reviewDays'); c.innerHTML='';
+  state.baseline.forEach((d,i)=>{
+    const red=d.type==='ride'&&d.planKm>avg*1.3;
+    const el=document.createElement('div'); el.className='toggle-day';
+    el.innerHTML=`<div><div class="small">${fmtDate(d.date)}</div>
+      <span class="pill ${d.type} ${red?'red':''}">${d.type==='ride'?'езда':'отдых'}</span></div>
+      <div class="row" style="gap:8px">
+        ${d.type==='ride'?`<input type="number" inputmode="numeric" value="${d.planKm}" style="width:92px;padding:8px" onchange="editPlanKm(${i},this.value)">`:'<span class="muted small">—</span>'}
+        <button class="btn-ghost btn-sm" onclick="toggleType(${i})">${d.type==='ride'?'→отдых':'→езда'}</button>
+      </div>`;
+    c.appendChild(el);
+  });
+}
+function editPlanKm(i,v){ state.baseline[i].planKm=+v||0; recumBaseline(); renderReview(); }
+function toggleType(i){ const d=state.baseline[i];
+  if(d.type==='ride'){d.type='rest';d.planKm=0;} else {d.type='ride';
+    const avg=Math.round(state.trip.totalKm/(state.baseline.filter(x=>x.type==='ride').length||1)); d.planKm=avg;}
+  state.schedule[i].type=d.type; recumBaseline(); renderReview();
+}
+function recumBaseline(){let cum=0;state.baseline.forEach(d=>{cum+=d.planKm;d.cumPlan=cum;});}
+function freezePlan(){
+  const tot=state.baseline[state.baseline.length-1].cumPlan;
+  if(Math.abs(tot-state.trip.totalKm)>1){
+    if(!confirm(`Сумма дневных норм = ${tot} км, а общий план = ${state.trip.totalKm} км. Заморозить с суммой ${tot}?`))return;
+    state.trip.totalKm=tot;
+  }
+  state.trip.frozen=true; save(); boot();
+}
+
+// ---------- calculations ----------
+function actualCum(uptoISO){
+  let s=0; for(const d in state.facts){ if(d<=uptoISO) s+=state.facts[d].km||0; } return s;
+}
+function planCumOn(iso){
+  const b=state.baseline; if(iso<b[0].date)return 0;
+  let last=0; for(const d of b){ if(d.date<=iso) last=d.cumPlan; else break; } return last;
+}
+function planDayIndexForCum(cum){ // fractional 0-based index in baseline
+  const b=state.baseline; if(cum<=0)return 0;
+  for(let i=0;i<b.length;i++){
+    if(b[i].cumPlan>=cum){const prev=i>0?b[i-1].cumPlan:0;const span=b[i].cumPlan-prev;
+      return i+(span>0?(cum-prev)/span:0);}
+  }
+  return b.length-1;
+}
+function todayIndex(iso){const b=state.baseline;for(let i=0;i<b.length;i++)if(b[i].date===iso)return i;return iso<b[0].date?-1:b.length-1;}
+function remainingRideDays(afterISO){
+  return state.schedule.filter(d=>d.date>afterISO && d.type==='ride').length;
+}
+function typeByCycle(globalIdx){const t=state.trip;const cyc=t.cycleRide+t.cycleRest;return (globalIdx%cyc)<t.cycleRide?'ride':'rest';}
+function projectFinish(remKm,today){
+  const cap=state.trip.capKm; let needRide=Math.ceil(remKm/cap); if(needRide<=0)return{date:state.trip.endDate,delay:0};
+  // anchor the walk to the trip: if today is before the start, count from the start day onward
+  let date=(today<state.trip.startDate)?addDays(state.trip.startDate,-1):today;
+  let counted=0, guard=0;
+  while(counted<needRide && guard<6000){
+    date=addDays(date,1); guard++;
+    let type;
+    const inSched=state.schedule.find(d=>d.date===date);
+    if(inSched) type=inSched.type;
+    else { const gi=diffDays(state.trip.startDate,date); type=gi>=0?typeByCycle(gi):'rest'; }
+    if(type==='ride')counted++;
+  }
+  return {date, delay:Math.max(0,diffDays(state.trip.endDate,date))};
+}
+
+// ---------- HOME ----------
+function renderHome(){
+  const t=state.trip, today=todayISO();
+  document.getElementById('homeTitle').textContent=t.name;
+  document.getElementById('homeDate').textContent=`${fmtDate(today)} · ${t.startPlace||'старт'} → ${t.endPlace||'финиш'}`;
+  const aCum=actualCum(today), pCum=planCumOn(today);
+  const kmDev=Math.round(aCum-pCum);
+  const ti=todayIndex(today), matched=planDayIndexForCum(aCum);
+  const daysDev= ti<0?0:(ti-matched); // + = behind
+  const remKm=Math.max(0,t.totalKm-aCum);
+  const remRide=remainingRideDays(today);
+  const normHold = remRide>0?Math.round(remKm/remRide):remKm;
+  const achievable = normHold<=t.capKm;
+  const proj=projectFinish(remKm,today);
+  const restAhead=state.schedule.filter(d=>d.date>today&&d.type==='rest').length;
+  const normIfAllRest = (remRide+restAhead)>0?Math.round(remKm/(remRide+restAhead)):remKm;
+
+  const devKmTxt = kmDev>=0?`+${kmDev} км`:`${kmDev} км`;
+  const devDayTxt = Math.abs(daysDev)<0.05?'точно по графику':
+    (daysDev>0?`отставание ${daysDev.toFixed(1)} дн.`:`опережение ${Math.abs(daysDev).toFixed(1)} дн.`);
+  const stateColor = daysDev>0.05?(achievable?'amber':'red'):'green';
+  const headNum = remKm<=0?'Финиш!':`${normHold}`;
+  const headLabel = remKm<=0?'маршрут пройден':'км сегодня, чтобы успеть к дате';
+
+  let body=`
+  <div class="card">
+    <div class="big ${stateColor} num">${headNum}</div>
+    <div class="muted">${headLabel}</div>
+    <div class="divider"></div>
+    <div class="row wrap">
+      <div class="stat"><div class="v num">${devKmTxt}</div><div class="l">отклонение по км</div></div>
+      <div class="stat"><div class="v">${devDayTxt}</div><div class="l">по графику</div></div>
+    </div>
+  </div>`;
+
+  if(remKm>0){
+    body+=`<div class="scenarios">
+      <div class="card"><h3>Успеть к дате</h3>
+        <div class="big ${achievable?'amber':'red'} num" style="font-size:34px">${normHold}</div>
+        <div class="small muted">км/день · осталось ${remRide} дней езды</div>
+        ${achievable?'':`<div class="hint danger-hint" style="margin-top:10px">Выше потолка ${t.capKm}. Перевод всех будущих отдыхов (${restAhead}) в езду → ${normIfAllRest} км/день. Или сдвинь дату.</div>`}
+      </div>
+      <div class="card"><h3>Держать темп ≤ ${t.capKm}</h3>
+        <div class="big num" style="font-size:34px">${fmtDate(proj.date)}</div>
+        <div class="small muted">прогноз финиша · ${proj.delay>0?('опоздание '+proj.delay+' дн.'):'без опоздания'}</div>
+      </div>
+    </div>`;
+    body+=`<div class="row" style="margin-top:14px;gap:12px">
+      <button class="btn-primary" onclick="go('fact')">Записать сегодня</button>
+      <button class="btn-ghost" onclick="go('plan')">Рычаги (план)</button>
+    </div>`;
+  } else {
+    body+=`<div class="ok-hint">Поздравляю — план пройден. Можешь продолжать писать факт, прогноз пересчитается.</div>`;
+  }
+  document.getElementById('homeBody').innerHTML=body;
+}
+
+// ---------- PLAN (live) ----------
+function renderPlanLive(){
+  const today=todayISO(), avg=Math.round(state.trip.totalKm/(state.baseline.filter(d=>d.type==='ride').length||1));
+  const c=document.getElementById('planList'); c.innerHTML='';
+  state.baseline.forEach((b,i)=>{
+    const sch=state.schedule[i], fact=state.facts[b.date];
+    const red=b.type==='ride'&&b.planKm>avg*1.3;
+    const isFuture=b.date>today, isToday=b.date===today;
+    const wrap=document.createElement('div'); wrap.className='card'; wrap.style.padding='12px 14px';
+    if(isToday)wrap.style.borderColor='var(--amber)';
+    wrap.innerHTML=`<div class="row">
+      <div><div class="small">${fmtDate(b.date)} ${isToday?'· сегодня':''}</div>
+        <span class="pill ${sch.type} ${red?'red':''}">${sch.type==='ride'?'езда':'отдых'}</span>
+        <span class="muted small num">${b.type==='ride'?'план '+b.planKm+' км':''}</span>
+        ${fact?`<span class="tag num">${fact.skipped?'пропуск':'факт '+fact.km+' км'}</span>`:''}
+      </div>
+      ${isFuture?`<button class="btn-ghost btn-sm" onclick="toggleScheduleDay(${i})">${sch.type==='ride'?'→отдых':'→езда'}</button>`:''}
+    </div>`;
+    c.appendChild(wrap);
+  });
+}
+function toggleScheduleDay(i){ const s=state.schedule[i]; s.type=s.type==='ride'?'rest':'ride'; save(); renderPlanLive(); }
+
+// ---------- FACT ----------
+function lastOdoBefore(iso){
+  let best=null,bestDate=null;
+  for(const d in state.facts){if(d<iso&&state.facts[d].odo!=null){if(!bestDate||d>bestDate){bestDate=d;best=state.facts[d].odo;}}}
+  if(best!=null)return best;
+  return state.trip.startOdo!=null?state.trip.startOdo:null;
+}
+function currentFactDate(){return document.getElementById('factHistory').dataset.editDate||todayISO();}
+function previewDelta(){
+  const date=currentFactDate(), cur=+document.getElementById('f_odo').value;
+  let prev=lastOdoBefore(date);
+  if(prev==null){const sv=+document.getElementById('f_startodo').value; if(sv)prev=sv;}
+  const p=document.getElementById('deltaPreview');
+  if(!cur){p.textContent='—';return;}
+  if(prev==null){p.textContent='Укажи стартовый одометр выше — с него пойдёт отсчёт.';return;}
+  const delta=cur-prev; p.innerHTML=`Предыдущий: <b class="num">${prev}</b> → за день: <b class="num">${delta}</b> км`;
+}
+function toggleSkip(){document.getElementById('reasonBlock').style.display=document.getElementById('f_skip').checked?'block':'none';}
+function renderFact(){
+  const date=todayISO();
+  document.getElementById('factHistory').dataset.editDate='';
+  document.getElementById('factDate').textContent=fmtDate(date);
+  const f=state.facts[date], noPrev=lastOdoBefore(date)==null;
+  document.getElementById('startOdoBlock').style.display=noPrev?'block':'none';
+  document.getElementById('f_startodo').value=noPrev&&state.trip.startOdo!=null?state.trip.startOdo:'';
+  document.getElementById('f_odo').value=f&&f.odo!=null?f.odo:'';
+  document.getElementById('f_skip').checked=f&&f.skipped||false; toggleSkip();
+  previewDelta();
+  const h=document.getElementById('factHistory'); const dates=Object.keys(state.facts).sort().reverse();
+  h.innerHTML=dates.length?'':'<div class="empty">Пока нет записей</div>';
+  dates.forEach(d=>{const x=state.facts[d];
+    const el=document.createElement('div');el.className='list-item';
+    el.innerHTML=`<div><div>${fmtDate(d)}</div>${x.skipped?`<span class="muted small">пропуск: ${x.reason||''}</span>`:`<span class="muted small num">${x.odo!=null?'одометр '+x.odo:''}</span>`}</div>
+      <div class="right"><div class="num" style="font-weight:700">${x.skipped?'0':x.km} км</div>
+      <button class="btn-ghost btn-sm" style="margin-top:4px" onclick="editFact('${d}')">править</button></div>`;
+    h.appendChild(el);});
+}
+function editFact(d){
+  const x=state.facts[d];
+  document.getElementById('factHistory').dataset.editDate=d;
+  document.getElementById('factDate').textContent=fmtDate(d)+' (правка)';
+  const noPrev=lastOdoBefore(d)==null;
+  document.getElementById('startOdoBlock').style.display=noPrev?'block':'none';
+  document.getElementById('f_startodo').value=noPrev&&state.trip.startOdo!=null?state.trip.startOdo:'';
+  document.getElementById('f_odo').value=x.odo!=null?x.odo:'';
+  document.getElementById('f_skip').checked=!!x.skipped; toggleSkip();
+  previewDelta(); window.scrollTo(0,0);
+}
+function saveFact(){
+  const editDate=document.getElementById('factHistory').dataset.editDate;
+  const date=editDate||todayISO();
+  const skip=document.getElementById('f_skip').checked;
+  if(skip){ state.facts[date]={km:0,skipped:true,reason:document.getElementById('f_reason').value}; }
+  else{
+    const cur=+document.getElementById('f_odo').value;
+    if(!cur){alert('Введи показание одометра');return;}
+    let prev=lastOdoBefore(date);
+    if(prev==null){
+      const sv=+document.getElementById('f_startodo').value;
+      if(!sv){alert('Это первая запись — укажи стартовый одометр, с него пойдёт отсчёт');return;}
+      state.trip.startOdo=sv; prev=sv;
+    }
+    const km=cur-prev;
+    if(km<0){alert('Пробег получился отрицательным — текущий одометр меньше предыдущего, проверь');return;}
+    state.facts[date]={km:Math.round(km),odo:cur,skipped:false};
+  }
+  document.getElementById('factHistory').dataset.editDate='';
+  save(); renderHome();
+  const sendBackup = !editDate;
+  if(sendBackup && confirm('День записан. Отправить свежий бэкап в Telegram/облако?')) shareBackup();
+  go('home');
+}
+
+// ---------- STOPS ----------
+function fillCats(){
+  const sel=document.getElementById('st_cat'), filt=document.getElementById('stopFilter');
+  sel.innerHTML=state.categories.map(c=>`<option>${c}</option>`).join('');
+  filt.innerHTML='<option value="">все категории</option>'+state.categories.map(c=>`<option>${c}</option>`).join('');
+}
+function addCategory(){const v=document.getElementById('st_newcat').value.trim();if(!v)return;
+  if(!state.categories.includes(v)){state.categories.push(v);save();fillCats();}
+  document.getElementById('st_cat').value=v;document.getElementById('st_newcat').value='';}
+function captureStop(){
+  const s=document.getElementById('gpsStatus'); s.textContent='Получаю GPS…';
+  if(!navigator.geolocation){s.textContent='GPS недоступен в этом браузере';openStopForm(null);return;}
+  navigator.geolocation.getCurrentPosition(
+    p=>{pendingStop={lat:p.coords.latitude,lng:p.coords.longitude,accuracy:Math.round(p.coords.accuracy),ts:Date.now()};
+      s.textContent='Точка снята';openStopForm(pendingStop);},
+    e=>{s.textContent='GPS не дал координаты ('+e.message+'). Сохраню без координат.';
+      pendingStop={lat:null,lng:null,accuracy:null,ts:Date.now()};openStopForm(pendingStop);},
+    {enableHighAccuracy:true,timeout:20000,maximumAge:0});
+}
+function openStopForm(p){
+  document.getElementById('stopForm').style.display='block';
+  document.getElementById('stopCoords').innerHTML = p&&p.lat!=null
+    ? `<span class="num">${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}</span> · ±${p.accuracy} м · ${new Date(p.ts).toLocaleTimeString('ru-RU')}`
+    : 'без координат · '+new Date(p?p.ts:Date.now()).toLocaleTimeString('ru-RU');
+}
+function cancelStop(){pendingStop=null;document.getElementById('stopForm').style.display='none';document.getElementById('st_note').value='';}
+function saveStop(){
+  if(!pendingStop)pendingStop={lat:null,lng:null,accuracy:null,ts:Date.now()};
+  state.stops.push({id:Date.now(),date:todayISO(),ts:pendingStop.ts,lat:pendingStop.lat,lng:pendingStop.lng,
+    accuracy:pendingStop.accuracy,category:document.getElementById('st_cat').value,note:document.getElementById('st_note').value.trim()});
+  save();cancelStop();renderStops();
+}
+function delStop(id){if(confirm('Удалить остановку?')){state.stops=state.stops.filter(s=>s.id!==id);save();renderStops();}}
+function renderStops(){
+  const f=document.getElementById('stopFilter').value;
+  const list=document.getElementById('stopList');
+  const items=state.stops.filter(s=>!f||s.category===f).sort((a,b)=>b.ts-a.ts);
+  list.innerHTML=items.length?'':'<div class="empty">Остановок пока нет</div>';
+  items.forEach(s=>{const el=document.createElement('div');el.className='list-item';
+    el.innerHTML=`<div><div><span class="pill">${s.category}</span></div>
+      <div class="muted small">${fmtDate(s.date)} · ${new Date(s.ts).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}
+      ${s.lat!=null?` · <span class="num">${s.lat.toFixed(4)},${s.lng.toFixed(4)}</span>`:' · без GPS'}</div>
+      ${s.note?`<div class="small">${s.note}</div>`:''}</div>
+      <button class="btn-ghost btn-sm" onclick="delStop(${s.id})">✕</button>`;
+    list.appendChild(el);});
+}
+
+// ---------- MORE: summary, chart, backup ----------
+function renderSummary(){
+  const today=todayISO();
+  const factDays=Object.values(state.facts).filter(f=>!f.skipped&&f.km>0);
+  const totalRidden=factDays.reduce((s,f)=>s+f.km,0);
+  const avg=factDays.length?Math.round(totalRidden/factDays.length):0;
+  const best=factDays.reduce((m,f)=>Math.max(m,f.km),0);
+  const worst=factDays.length?factDays.reduce((m,f)=>Math.min(m,f.km),1e9):0;
+  const rideDays=factDays.length, restDays=Object.values(state.facts).filter(f=>f.skipped).length;
+  const byCat={}; state.stops.forEach(s=>byCat[s.category]=(byCat[s.category]||0)+1);
+  document.getElementById('summary').innerHTML=`
+    <div class="row wrap">
+      <div class="stat"><div class="v num">${totalRidden}</div><div class="l">всего км (факт)</div></div>
+      <div class="stat"><div class="v num">${avg}</div><div class="l">средн. в день езды</div></div>
+      <div class="stat"><div class="v num">${best||0}</div><div class="l">лучший день</div></div>
+      <div class="stat"><div class="v num">${worst<1e9?worst:0}</div><div class="l">худший день</div></div>
+      <div class="stat"><div class="v num">${rideDays}</div><div class="l">дней в седле</div></div>
+      <div class="stat"><div class="v num">${state.stops.length}</div><div class="l">остановок</div></div>
+    </div>
+    <div class="divider"></div>
+    <div class="small muted">Остановки по категориям</div>
+    <div class="row wrap" style="margin-top:6px">${Object.keys(byCat).length?Object.entries(byCat).map(([k,v])=>`<span class="tag">${k}: <b class="num">${v}</b></span>`).join(' '):'<span class="muted small">нет</span>'}</div>`;
+}
+function drawChart(){
+  const cv=document.getElementById('chart'), ctx=cv.getContext('2d');
+  const W=cv.width,H=cv.height,pad=34; ctx.clearRect(0,0,W,H);
+  const b=state.baseline, maxKm=state.trip.totalKm||1;
+  const x=i=>pad+(W-pad*1.2)*(i/(b.length-1)); const y=v=>H-pad-(H-pad*1.4)*(v/maxKm);
+  // grid
+  ctx.strokeStyle='#323b46';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(pad,H-pad);ctx.lineTo(W-6,H-pad);ctx.moveTo(pad,H-pad);ctx.lineTo(pad,8);ctx.stroke();
+  // plan line
+  ctx.strokeStyle='#9aa3ad';ctx.lineWidth=2;ctx.beginPath();
+  b.forEach((d,i)=>{const px=x(i),py=y(d.cumPlan);i?ctx.lineTo(px,py):ctx.moveTo(px,py);});ctx.stroke();
+  // fact line (cumulative by date index)
+  ctx.strokeStyle='#f5a623';ctx.lineWidth=2.5;ctx.beginPath();let started=false,cum=0;
+  b.forEach((d,i)=>{ if(state.facts[d.date]) cum+=state.facts[d.date].km||0;
+    if(state.facts[d.date]||d.date<=todayISO()){const px=x(i),py=y(cum);started?ctx.lineTo(px,py):ctx.moveTo(px,py);started=true;}});
+  ctx.stroke();
+  ctx.fillStyle='#9aa3ad';ctx.font='12px system-ui';ctx.fillText('— план',pad+4,16);
+  ctx.fillStyle='#f5a623';ctx.fillText('— факт',pad+70,16);
+}
+function refreshStorage(){
+  const bytes=new Blob([JSON.stringify(state)]).size;
+  let txt=`Данные поездки: <b>${(bytes/1024).toFixed(1)} КБ</b> (лимит ~5000 КБ — запас огромный)`;
+  document.getElementById('storageInfo').innerHTML=txt;
+  if(navigator.storage&&navigator.storage.estimate){
+    navigator.storage.estimate().then(e=>{
+      const used=(e.usage/1048576).toFixed(1), q=(e.quota/1048576).toFixed(0);
+      navigator.storage.persisted&&navigator.storage.persisted().then(p=>{
+        document.getElementById('storageInfo').innerHTML=txt+
+        `<br>Сайт: ${used} МБ из ~${q} МБ · защита: <b style="color:${p?'var(--green)':'var(--muted)'}">${p?'да':'нет'}</b>`;});
+    });
+  }
+}
+function requestPersist(){
+  if(navigator.storage&&navigator.storage.persist){navigator.storage.persist().then(g=>{alert(g?'Защита включена':'Браузер пока не выдал защиту — следи за бэкапом в Telegram');refreshStorage();});}
+  else alert('Этот браузер не поддерживает защиту хранилища');
+}
+function shareBackup(){
+  const json=JSON.stringify(state,null,2);
+  const fname=`moto-backup-${todayISO()}.json`;
+  const file=new File([json],fname,{type:'application/json'});
+  if(navigator.canShare&&navigator.canShare({files:[file]})){
+    navigator.share({files:[file],title:'Бэкап поездки'}).catch(()=>downloadJSON(json,fname));
+  } else downloadJSON(json,fname);
+}
+function downloadJSON(json,fname){
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([json],{type:'application/json'}));
+  a.download=fname;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+}
+function importBackup(ev){
+  const file=ev.target.files[0]; if(!file)return;
+  const r=new FileReader();
+  r.onload=()=>{try{const obj=JSON.parse(r.result);
+    if(!obj.trip||!obj.baseline)throw new Error('не похоже на бэкап');
+    if(confirm('Заменить текущие данные данными из бэкапа? Текущие будут перезаписаны.')){
+      state=obj;save();boot();}
+  }catch(e){alert('Не удалось прочитать бэкап: '+e.message);}};
+  r.readAsText(file); ev.target.value='';
+}
+function updateCap(){state.trip.capKm=+document.getElementById('set_cap').value||state.trip.capKm;save();renderHome();}
+function resetAll(){if(confirm('Удалить поездку полностью? Сделай бэкап заранее.')){if(confirm('Точно? Отмены нет.')){localStorage.removeItem(KEY);location.reload();}}}
+
+// ---------- navigation / boot ----------
+function go(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.screen===id));
+  window.scrollTo(0,0);
+  if(id==='home')renderHome();
+  if(id==='plan')renderPlanLive();
+  if(id==='fact')renderFact();
+  if(id==='stops'){fillCats();renderStops();}
+  if(id==='more'){renderSummary();drawChart();refreshStorage();document.getElementById('set_cap').value=state.trip.capKm;}
+}
+function boot(){
+  state=load();
+  if(state&&state.trip&&state.trip.frozen){
+    document.getElementById('nav').style.display='flex';
+    fillCats(); go('home');
+  } else if(state&&state.trip&&!state.trip.frozen){
+    document.getElementById('nav').style.display='none'; renderReview(); go('review');
+  } else {
+    document.getElementById('nav').style.display='none';
+    document.getElementById('s_sdate').value=todayISO();
+    go('setup');
+  }
+}
+boot();
+if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});}
+</script>
+</body>
+</html>
