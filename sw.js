@@ -1,4 +1,4 @@
-const CACHE = 'moto-v2';
+const CACHE = 'moto-v3';
 const ASSETS = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
@@ -16,13 +16,28 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
-  e.respondWith(
-    caches.match(e.request, { ignoreSearch: true }).then(r =>
-      r || fetch(e.request).then(resp => {
+  const req = e.request;
+  const isPage = req.mode === 'navigate' || req.destination === 'document'
+    || req.url.endsWith('/') || req.url.endsWith('index.html');
+  if (isPage) {
+    // network-first: свежий код при интернете, кэш — оффлайн
+    e.respondWith(
+      fetch(req).then(resp => {
         const cp = resp.clone();
-        caches.open(CACHE).then(c => c.put(e.request, cp));
+        caches.open(CACHE).then(c => c.put('./index.html', cp));
         return resp;
       }).catch(() => caches.match('./index.html'))
-    )
-  );
+    );
+  } else {
+    // cache-first для иконок/манифеста
+    e.respondWith(
+      caches.match(req, { ignoreSearch: true }).then(r =>
+        r || fetch(req).then(resp => {
+          const cp = resp.clone();
+          caches.open(CACHE).then(c => c.put(req, cp));
+          return resp;
+        })
+      )
+    );
+  }
 });
