@@ -494,10 +494,8 @@ function saveFact(){
     state.facts[date]={km:Math.round(km),odo:cur,skipped:false};
   }
   document.getElementById('factHistory').dataset.editDate='';
-  save(); renderHome();
-  const sendBackup = !editDate;
-  if(sendBackup && confirm('День записан. Отправить свежий бэкап в Telegram/облако?')) shareBackup();
-  go('home');
+  save(); renderHome(); go('home');
+  if(!editDate) shareBackup();
 }
 
 // ---------- STOPS ----------
@@ -610,8 +608,12 @@ function shareBackup(){
   const fname=`moto-backup-${todayISO()}.json`;
   const file=new File([json],fname,{type:'application/json'});
   if(navigator.canShare&&navigator.canShare({files:[file]})){
-    navigator.share({files:[file],title:'Бэкап поездки'}).catch(()=>downloadJSON(json,fname));
-  } else downloadJSON(json,fname);
+    navigator.share({files:[file],title:'Бэкап поездки',text:'Бэкап мото-трекера'})
+      .catch(err=>{ if(err&&err.name==='AbortError')return; downloadJSON(json,fname); });
+  } else {
+    downloadJSON(json,fname);
+    setTimeout(()=>alert('Системный «Поделиться» с файлами недоступен — бэкап сохранён в «Загрузки». Прикрепи его в Telegram вручную.'),120);
+  }
 }
 function downloadJSON(json,fname){
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([json],{type:'application/json'}));
