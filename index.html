@@ -207,10 +207,10 @@
   <div class="card"><h3>Опасная зона</h3>
     <button class="btn-ghost" style="color:var(--red)" onclick="resetAll()">Удалить поездку</button>
   </div>
-  <div class="tiny muted" style="text-align:center;margin-top:8px">Мото-трекер · версия 3</div>
+  <div class="tiny muted" style="text-align:center;margin-top:8px">Мото-трекер · версия 3.1</div>
 </div>
 
-<input type="file" id="importFile" accept="application/json,.json" style="display:none" onchange="importBackup(event)">
+<input type="file" id="importFile" accept=".json,.txt,application/json,text/plain" style="display:none" onchange="importBackup(event)">
 
 <!-- ============ NAV ============ -->
 <nav id="nav" style="display:none">
@@ -606,14 +606,22 @@ function requestPersist(){
 }
 function shareBackup(){
   const json=JSON.stringify(state,null,2);
-  const fname=`moto-backup-${todayISO()}.json`;
-  const file=new File([json],fname,{type:'application/json'});
-  if(navigator.canShare&&navigator.canShare({files:[file]})){
-    navigator.share({files:[file],title:'Бэкап поездки',text:'Бэкап мото-трекера'})
-      .catch(err=>{ if(err&&err.name==='AbortError')return; downloadJSON(json,fname); });
+  const base=`moto-backup-${todayISO()}`;
+  const fileTxt=new File([json], base+'.txt', {type:'text/plain'});
+  const fileJson=new File([json], base+'.json', {type:'application/json'});
+  let file=null;
+  if(navigator.canShare){
+    if(navigator.canShare({files:[fileTxt]})) file=fileTxt;
+    else if(navigator.canShare({files:[fileJson]})) file=fileJson;
+  }
+  if(navigator.share && file){
+    navigator.share({files:[file],title:'Бэкап поездки'})
+      .catch(err=>{ if(err&&err.name==='AbortError')return;
+        downloadJSON(json,base+'.json');
+        alert('«Поделиться» не сработал: '+(err&&err.name||'ошибка')+'. Бэкап сохранён в «Загрузки».'); });
   } else {
-    downloadJSON(json,fname);
-    setTimeout(()=>alert('Системный «Поделиться» с файлами недоступен — бэкап сохранён в «Загрузки». Прикрепи его в Telegram вручную.'),120);
+    downloadJSON(json,base+'.json');
+    alert('Обмен файлами недоступен в этом браузере (share='+(!!navigator.share)+', файлы='+(!!(navigator.canShare&&navigator.canShare({files:[fileTxt]})))+'). Бэкап в «Загрузках» — прикрепи в Telegram вручную.');
   }
 }
 function downloadJSON(json,fname){
